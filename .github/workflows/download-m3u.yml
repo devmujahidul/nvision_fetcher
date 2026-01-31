@@ -1,0 +1,53 @@
+name: Update nvision.m3u
+
+on:
+  schedule:
+    # Runs daily at 06:00 UTC (adjust cron if you want a different time)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Check secrets
+        env:
+          M3U_USERNAME: ${{ secrets.M3U_USERNAME }}
+          M3U_PASSWORD: ${{ secrets.M3U_PASSWORD }}
+        run: |
+          if [ -z "${M3U_USERNAME}" ] || [ -z "${M3U_PASSWORD}" ]; then
+            echo "Required secrets M3U_USERNAME and M3U_PASSWORD are not set. Aborting."
+            exit 1
+          fi
+
+      - name: Download M3U
+        env:
+          M3U_USERNAME: ${{ secrets.M3U_USERNAME }}
+          M3U_PASSWORD: ${{ secrets.M3U_PASSWORD }}
+        run: python scripts/download_m3u.py --output nvision.m3u
+
+      - name: Commit and push if changed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Set remote to use the token for pushing
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          if git status --porcelain | grep -q nvision.m3u; then
+            git add nvision.m3u
+            git commit -m "Update nvision.m3u"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "No changes to commit"
+          fi
